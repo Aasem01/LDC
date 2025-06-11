@@ -140,7 +140,7 @@ class RAGService:
                 rag_logger.error(f"Error initializing QA chain: {str(e)}")
                 raise
 
-    def get_answer(self, question: str) -> Dict:
+    async def get_answer(self, question: str) -> Dict:
         """
         Get answer for a question using the RAG pipeline.
         
@@ -159,7 +159,8 @@ class RAGService:
             if not question or not question.strip():
                 raise ValueError("Question cannot be empty")
                 
-            result = self._qa_chain.invoke({"query": question})
+            # Use ainvoke for async operation
+            result = await self._qa_chain.ainvoke({"query": question})
             
             if not result or "result" not in result:
                 raise ValueError("Invalid response format from QA chain")

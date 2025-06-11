@@ -19,7 +19,7 @@ async def query(request: QueryRequest):
     """
     api_logger.info(f"Received query request: {request.question}")
     try:
-        result = rag_service.get_answer(request.question)
+        result = await rag_service.get_answer(request.question)
         api_logger.info("Successfully processed query")
         api_logger.debug(f"Found {len(result['source_documents'])} relevant documents")
         return QueryResponse(**result)
