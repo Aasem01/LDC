@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using ChatBotAPI.Models;
 using ChatBotAPI.Data;
+using ChatBotAPI.Utils;
 
 namespace ChatBotAPI.Controllers
 {
@@ -22,30 +23,38 @@ namespace ChatBotAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Ask([FromBody] UserQuery query)
+        [Route("Ask")]
+        public async Task<ActionResult<ChatbotResponse>> AskAsync([FromBody] UserQuery query)
         {
             try
             {
+                Loggers.AskController.Info($"Received question: {query.Question}");
+
                 var client = _httpClientFactory.CreateClient("PythonBackend");
+                Loggers.PythonBackend.Info($"Sending request to Python backend: {query.Question}");
+                
                 var response = await client.PostAsJsonAsync("/rag/rag_chat", query);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogError($"Python backend returned {response.StatusCode}");
+                    var error = $"Python backend returned {response.StatusCode}";
+                    Loggers.PythonBackend.Error(error);
                     return StatusCode(500, "Error communicating with Python backend");
                 }
 
                 var chatbotResponse = await response.Content.ReadFromJsonAsync<ChatbotResponse>();
                 if (chatbotResponse == null)
                 {
+                    Loggers.PythonBackend.Error("Invalid response from Python backend");
                     return StatusCode(500, "Invalid response from Python backend");
                 }
 
+                Loggers.AskController.Info($"Received response: {chatbotResponse.Answer}");
                 return Ok(chatbotResponse);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing question");
+                Loggers.AskController.Error($"Error processing question: {ex.Message}");
                 return StatusCode(500, "An error occurred while processing your question");
             }
         }

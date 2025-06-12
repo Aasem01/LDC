@@ -164,3 +164,10 @@ C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\obj\Debug\net9.0\refint\ChatBotAPI.dl
 C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\obj\Debug\net9.0\ChatBotAPI.pdb
 C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\obj\Debug\net9.0\ChatBotAPI.genruntimeconfig.cache
 C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\obj\Debug\net9.0\ref\ChatBotAPI.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Extensions.Logging.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Extensions.Logging.File.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Formatting.Compact.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Sinks.Async.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Sinks.File.dll
+C:\Users\Aasem\Desktop\LDC_task\ChatBotAPI\bin\Debug\net9.0\Serilog.Sinks.RollingFile.dll
