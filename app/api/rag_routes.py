@@ -17,7 +17,7 @@ async def query(request: QueryRequest):
     Returns:
         QueryResponse: The answer and source documents
     """
-    api_logger.info(f"Received query request: {request.question}")
+    api_logger.info(f"Received request from user {request.user_id}\nquestion: {request.question}")
     try:
         result = await rag_service.get_answer(request.question)
         api_logger.info("Successfully processed query")
