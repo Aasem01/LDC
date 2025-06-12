@@ -5,6 +5,7 @@ using ChatBotAPI.Models;
 using ChatBotAPI.Data;
 using ChatBotAPI.Utils;
 using System;
+using System.Text.Json.Serialization;
 
 namespace ChatBotAPI.Controllers
 {
@@ -14,6 +15,7 @@ namespace ChatBotAPI.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<AskController> _logger;
+        private readonly JsonSerializerOptions _jsonOptions;
 
         public AskController(
             IHttpClientFactory httpClientFactory,
@@ -21,6 +23,11 @@ namespace ChatBotAPI.Controllers
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true
+            };
         }
 
         [HttpPost]
@@ -30,9 +37,9 @@ namespace ChatBotAPI.Controllers
             try
             {
                 // Generate UUID if not provided
-                if (string.IsNullOrEmpty(query.UserId))
+                if (query.UserId == Guid.Empty)
                 {
-                    query.UserId = Guid.NewGuid().ToString();
+                    query.UserId = Guid.NewGuid();
                     Loggers.AskController.Info($"Generated new UserId: {query.UserId}");
                 }
 
@@ -41,16 +48,28 @@ namespace ChatBotAPI.Controllers
                 var client = _httpClientFactory.CreateClient("PythonBackend");
                 Loggers.PythonBackend.Info($"Sending request to Python backend for UserId {query.UserId}: {query.Question}");
                 
-                var response = await client.PostAsJsonAsync("/rag/rag_chat", query);
+                // Create request object matching Python backend's expected format exactly
+                var request = new
+                {
+                    question = query.Question,
+                    user_id = query.UserId.ToString("D") // Format as "00000000-0000-0000-0000-000000000000"
+                };
+
+                // Log the exact request being sent
+                var requestJson = JsonSerializer.Serialize(request, _jsonOptions);
+                Loggers.PythonBackend.Info($"Request payload: {requestJson}");
+
+                var response = await client.PostAsJsonAsync("/rag/rag_chat", request, _jsonOptions);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var error = $"Python backend returned {response.StatusCode}";
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    var error = $"Python backend returned {response.StatusCode}. Content: {errorContent}";
                     Loggers.PythonBackend.Error($"Error for UserId {query.UserId}: {error}");
                     return StatusCode(500, "Error communicating with Python backend");
                 }
 
-                var chatbotResponse = await response.Content.ReadFromJsonAsync<ChatbotResponse>();
+                var chatbotResponse = await response.Content.ReadFromJsonAsync<ChatbotResponse>(_jsonOptions);
                 if (chatbotResponse == null)
                 {
                     Loggers.PythonBackend.Error($"Invalid response from Python backend for UserId {query.UserId}");
