@@ -166,7 +166,8 @@ class RAGService:
                 raise ValueError("Invalid response format from QA chain")
                 
             rag_logger.info("Successfully generated answer")
-            rag_logger.debug(f"Found {len(result['source_documents'])} relevant documents")
+            rag_logger.info(f"Answer: {result['result']}")
+            rag_logger.info(f"Found {len(result['source_documents'])} relevant documents")
             
             # Format source documents according to schema
             source_docs = [

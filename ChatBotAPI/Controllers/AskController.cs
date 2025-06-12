@@ -4,6 +4,7 @@ using System.Text.Json;
 using ChatBotAPI.Models;
 using ChatBotAPI.Data;
 using ChatBotAPI.Utils;
+using ChatBotAPI.Services;
 using System;
 using System.Text.Json.Serialization;
 
@@ -13,15 +14,15 @@ namespace ChatBotAPI.Controllers
     [Route("[controller]")]
     public class AskController : ControllerBase
     {
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IPythonBackendService _pythonBackend;
         private readonly ILogger<AskController> _logger;
         private readonly JsonSerializerOptions _jsonOptions;
 
         public AskController(
-            IHttpClientFactory httpClientFactory,
+            IPythonBackendService pythonBackend,
             ILogger<AskController> logger)
         {
-            _httpClientFactory = httpClientFactory;
+            _pythonBackend = pythonBackend;
             _logger = logger;
             _jsonOptions = new JsonSerializerOptions
             {
@@ -40,14 +41,11 @@ namespace ChatBotAPI.Controllers
                 if (query.UserId == Guid.Empty)
                 {
                     query.UserId = Guid.NewGuid();
-                    Loggers.AskController.Info($"Generated new UserId: {query.UserId}");
+                    _logger.LogInformation($"Generated new UserId: {query.UserId}");
                 }
 
-                Loggers.AskController.Info($"Received question from UserId {query.UserId}: {query.Question}");
+                _logger.LogInformation($"Received question from UserId {query.UserId}: {query.Question}");
 
-                var client = _httpClientFactory.CreateClient("PythonBackend");
-                Loggers.PythonBackend.Info($"Sending request to Python backend for UserId {query.UserId}: {query.Question}");
-                
                 // Create request object matching Python backend's expected format exactly
                 var request = new
                 {
@@ -57,32 +55,27 @@ namespace ChatBotAPI.Controllers
 
                 // Log the exact request being sent
                 var requestJson = JsonSerializer.Serialize(request, _jsonOptions);
-                Loggers.PythonBackend.Info($"Request payload: {requestJson}");
+                _logger.LogInformation($"Request payload: {requestJson}");
 
-                var response = await client.PostAsJsonAsync("/rag/rag_chat", request, _jsonOptions);
+                var response = await _pythonBackend.PostAsync<ChatbotResponse>("rag/rag_chat", request);
 
-                if (!response.IsSuccessStatusCode)
+                if (response == null)
                 {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    var error = $"Python backend returned {response.StatusCode}. Content: {errorContent}";
-                    Loggers.PythonBackend.Error($"Error for UserId {query.UserId}: {error}");
-                    return StatusCode(500, "Error communicating with Python backend");
-                }
-
-                var chatbotResponse = await response.Content.ReadFromJsonAsync<ChatbotResponse>(_jsonOptions);
-                if (chatbotResponse == null)
-                {
-                    Loggers.PythonBackend.Error($"Invalid response from Python backend for UserId {query.UserId}");
+                    _logger.LogError($"Invalid response from Python backend for UserId {query.UserId}");
                     return StatusCode(500, "Invalid response from Python backend");
                 }
 
-                Loggers.AskController.Info($"Received response for UserId {query.UserId}: {chatbotResponse.Answer}");
-                return Ok(chatbotResponse);
+                _logger.LogInformation($"Received response for UserId {query.UserId}: {response.Answer}");
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                Loggers.AskController.Error($"Error processing question for UserId {query.UserId}: {ex.Message}");
-                return StatusCode(500, "An error occurred while processing your question");
+                _logger.LogError(ex, $"Error processing question for UserId {query.UserId}: {ex.Message}");
+                return StatusCode(500, new { 
+                    message = "An error occurred while processing your question",
+                    error = ex.Message,
+                    errorType = ex.GetType().Name
+                });
             }
         }
     }

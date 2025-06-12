@@ -5,7 +5,7 @@ echo Starting both Python Backend and .NET Web API...
 start "Python Backend" cmd /k "run.bat"
 
 :: Wait for Python backend to start
-timeout /t 5
+timeout /t 10
 
 :: Start .NET Web API
 echo Starting .NET Web API...

@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     API_HOST: str = os.getenv("API_HOST", "127.0.0.1")
     API_PORT: int = int(os.getenv("API_PORT", "9000"))
     
+    # Security Settings
+    API_KEY: str = os.getenv("API_KEY", "SElIKLEvUEB9cY6HG8cXQqJYHRqYJHNoIAXGs7FdkwY")
+    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:7000/").split(",")
+    
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     

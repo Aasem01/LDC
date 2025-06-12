@@ -19,11 +19,11 @@ if not exist venv (
 call venv\Scripts\activate
 
 :: Upgrade pip
-python -m pip install --upgrade pip
+@REM python -m pip install --upgrade pip
 
 :: Install/update requirements
-echo Installing/updating requirements...
-pip install -r requirements.txt
+@REM echo Installing/updating requirements...
+@REM pip install -r requirements.txt
 
 :: Create logs directory if it doesn't exist
 if not exist logs mkdir logs
