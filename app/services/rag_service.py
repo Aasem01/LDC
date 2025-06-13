@@ -5,33 +5,30 @@ from langchain.prompts import PromptTemplate
 from typing import List, Dict
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline, AutoModelForCausalLM
 import torch
-from app.core.config import get_settings
+from app.core.config import settings
 from app.services.embedding_service import embedding_service
-from app.services.embedding_service import EmbeddingService
+from app.services.db_service import db_service
 from app.utils.logger import rag_logger
 from langchain_community.llms import HuggingFaceEndpoint
 
 
-settings = get_settings()
+
 
 class RAGService:
     _instance = None
     _llm = None
     _qa_chain = None
 
-    def __new__(cls, embedding_service: EmbeddingService):
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super(RAGService, cls).__new__(cls)
             rag_logger.info("Creating new RAGService instance")
         return cls._instance
 
-    def __init__(self, embedding_service: EmbeddingService):
+    def __init__(self):
         if not hasattr(self, 'initialized'):
             rag_logger.info("Initializing RAGService")
-            self.embedding_service = embedding_service
             self._initialize_llm()
-            # Initialize vector store
-            self.embedding_service.load_vector_store()
             self.initialized = True
 
     def _initialize_llm(self):
@@ -64,7 +61,6 @@ class RAGService:
                 device_map="auto"
             )
 
-
             # Create pipeline
             pipe = pipeline(
                 "text-generation",
@@ -75,13 +71,13 @@ class RAGService:
                 top_p=0.95,
                 repetition_penalty=1.15,
                 do_sample=True,
-                # trust_remote_code=True
             )
             
             # Create LangChain wrapper
             self._llm = HuggingFacePipeline(pipeline=pipe)
             rag_logger.info("Successfully initialized Hugging Face pipeline")
-        # Test the endpoint with a simple prompt
+            
+            # Test the endpoint with a simple prompt
             test_response = self._llm.invoke("Hello")
             if not test_response:
                 raise ValueError("Empty response from Hugging Face endpoint")
@@ -99,7 +95,6 @@ class RAGService:
                 base_url="https://api.deepseek.com",
                 temperature=0.1,
                 streaming=False,
-                # callbacks=[LANGFUSE_HANDLER]
             )
             rag_logger.info("Successfully initialized OpenAI model")
         except Exception as e:
@@ -110,12 +105,9 @@ class RAGService:
         """Initialize the QA chain"""
         if self._qa_chain is None:
             rag_logger.info("Initializing QA chain")
-            if not self.embedding_service.vector_store:
-                error_msg = "Vector store not initialized"
-                rag_logger.error(error_msg)
-                raise ValueError(error_msg)
-                
             try:
+                vector_store = db_service.get_vector_store()
+                
                 prompt_template = PromptTemplate(
                     template="""You are a helpful AI assistant. Use the following pieces of context to answer the question at the end.
                     If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -131,7 +123,7 @@ class RAGService:
                 self._qa_chain = RetrievalQA.from_chain_type(
                     llm=self._llm,
                     chain_type="stuff",
-                    retriever=self.embedding_service.vector_store.as_retriever(),
+                    retriever=vector_store.as_retriever(),
                     return_source_documents=True,
                     chain_type_kwargs={"prompt": prompt_template}
                 )
@@ -190,4 +182,4 @@ class RAGService:
             raise
 
 # Initialize services once
-rag_service = RAGService(embedding_service)
+rag_service = RAGService()

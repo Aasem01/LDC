@@ -1,30 +1,27 @@
 from typing import List, Dict, Optional
-from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
-from app.core.config import get_settings
+from app.core.config import settings
 from app.services.document_loader import document_loader
+from app.services.db_service import db_service
 from app.utils.logger import chroma_logger
 import os
 import shutil
 from datetime import datetime
 import pytz
 
-settings = get_settings()
 
 class ChromaService:
     def __init__(self):
         self.persist_directory = settings.CHROMA_PERSIST_DIRECTORY
         self.embeddings = None  # Will be set by EmbeddingService
-        self.vector_store = None
 
     def initialize(self, embeddings):
         """Initialize the ChromaDB service with embeddings"""
         self.embeddings = embeddings
         try:
-            self.vector_store = Chroma(
-                persist_directory=self.persist_directory,
-                embedding_function=self.embeddings
-            )
+            # Initialize database if not already initialized
+            if not db_service.is_initialized():
+                db_service.initialize(embeddings)
             chroma_logger.info("ChromaDB service initialized successfully")
         except Exception as e:
             chroma_logger.error(f"Error initializing ChromaDB: {str(e)}")
@@ -55,11 +52,10 @@ class ChromaService:
             bool: True if file exists in ChromaDB, False otherwise
         """
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # Get all documents
-            results = self.vector_store.get()
+            results = vector_store.get()
             
             # Check if any document has this filename as source
             for metadata in results['metadatas']:
@@ -82,11 +78,10 @@ class ChromaService:
             List[Dict]: List of documents associated with the file
         """
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # Get all documents
-            results = self.vector_store.get()
+            results = vector_store.get()
             documents = []
             
             # Filter documents by source filename
@@ -112,10 +107,9 @@ class ChromaService:
             List[Dict]: List of documents with their metadata
         """
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
-            results = self.vector_store.get()
+            results = vector_store.get()
             documents = []
             
             for i in range(len(results['ids'])):
@@ -135,13 +129,12 @@ class ChromaService:
     def get_document_info(self) -> Dict:
         """Get information about the ChromaDB collection"""
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
-            results = self.vector_store.get()
+            results = vector_store.get()
             info = {
                 'total_documents': len(results['ids']),
-                'collection_name': self.vector_store._collection.name,
+                'collection_name': vector_store._collection.name,
                 'embedding_dimension': len(results['embeddings'][0]) if results['embeddings'] else 0,
                 'persist_directory': self.persist_directory
             }
@@ -155,15 +148,14 @@ class ChromaService:
     def delete_all(self):
         """Delete all data from ChromaDB"""
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # Get all document IDs
-            results = self.vector_store.get()
+            results = vector_store.get()
             if results['ids']:
                 # Delete all documents by their IDs
-                self.vector_store._collection.delete(ids=results['ids'])
-                self.vector_store.persist()
+                vector_store._collection.delete(ids=results['ids'])
+                vector_store.persist()
             
             chroma_logger.info("Successfully deleted all data from ChromaDB")
         except Exception as e:
@@ -181,8 +173,7 @@ class ChromaService:
             str: ID of the added document
         """
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # Add timestamps to metadata
             current_time = datetime.now(pytz.UTC).isoformat()
@@ -192,8 +183,8 @@ class ChromaService:
             })
             
             # Add document to ChromaDB
-            self.vector_store.add_documents([document])
-            self.vector_store.persist()
+            vector_store.add_documents([document])
+            vector_store.persist()
             
             chroma_logger.info(f"Document added successfully: {document.metadata.get('source', 'Unknown')}")
             return document.metadata.get("id", "")
@@ -205,11 +196,10 @@ class ChromaService:
     def delete_document(self, document_id: str):
         """Delete a specific document from ChromaDB"""
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
-            self.vector_store._collection.delete(ids=[document_id])
-            self.vector_store.persist()
+            vector_store._collection.delete(ids=[document_id])
+            vector_store.persist()
             
             chroma_logger.info(f"Successfully deleted document with ID: {document_id}")
         except Exception as e:
@@ -219,8 +209,7 @@ class ChromaService:
     def update_document(self, document_id: str, new_content: str, new_metadata: Optional[Dict] = None):
         """Update an existing document in ChromaDB"""
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # First delete the old document
             self.delete_document(document_id)
@@ -254,8 +243,7 @@ class ChromaService:
             Dict: Processing statistics
         """
         try:
-            if not self.vector_store:
-                raise ValueError("ChromaDB not initialized")
+            vector_store = db_service.get_vector_store()
             
             # Ensure directory exists
             if not os.path.exists(directory_path):

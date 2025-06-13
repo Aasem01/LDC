@@ -1,16 +1,15 @@
 from typing import List
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
 from langchain.schema import Document
-from app.core.config import get_settings
+from app.core.config import settings
+from app.services.db_service import db_service
 from app.utils.logger import embedding_logger
 
-settings = get_settings()
+
 
 class EmbeddingService:
     _instance = None
     _embeddings = None
-    _vector_store = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -33,6 +32,10 @@ class EmbeddingService:
                     model_name=settings.EMBEDDING_MODEL_NAME
                 )
                 embedding_logger.info("Successfully loaded embeddings model")
+                
+                # Initialize database service with embeddings
+                if not db_service.is_initialized():
+                    db_service.initialize(self._embeddings)
             except Exception as e:
                 embedding_logger.error(f"Error loading embeddings model: {str(e)}")
                 raise
@@ -43,9 +46,7 @@ class EmbeddingService:
 
     @property
     def vector_store(self):
-        if self._vector_store is None:
-            self.load_vector_store()
-        return self._vector_store
+        return db_service.vector_store
 
     def create_vector_store(self, documents: List[Document]) -> None:
         """
@@ -58,32 +59,17 @@ class EmbeddingService:
         embedding_logger.debug(f"Persistence directory: {settings.CHROMA_PERSIST_DIRECTORY}")
         
         try:
-            self._vector_store = Chroma.from_documents(
-                documents=documents,
-                embedding=self.embeddings,
-                persist_directory=settings.CHROMA_PERSIST_DIRECTORY
-            )
-            self._vector_store.persist()
+            # Initialize the database service with embeddings
+            db_service.initialize(self.embeddings)
+            
+            # Add documents to the vector store
+            vector_store = db_service.get_vector_store()
+            vector_store.add_documents(documents)
+            vector_store.persist()
+            
             embedding_logger.info("Successfully created and persisted vector store")
         except Exception as e:
             embedding_logger.error(f"Error creating vector store: {str(e)}")
-            raise
-
-    def load_vector_store(self) -> None:
-        """
-        Load an existing vector store from disk.
-        """
-        embedding_logger.info("Attempting to load existing vector store")
-        embedding_logger.debug(f"Loading from: {settings.CHROMA_PERSIST_DIRECTORY}")
-        
-        try:
-            self._vector_store = Chroma(
-                persist_directory=settings.CHROMA_PERSIST_DIRECTORY,
-                embedding_function=self.embeddings
-            )
-            embedding_logger.info("Successfully loaded vector store")
-        except Exception as e:
-            embedding_logger.error(f"Error loading vector store: {str(e)}")
             raise
 
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
@@ -100,18 +86,13 @@ class EmbeddingService:
         embedding_logger.info(f"Performing similarity search for query: {query}")
         embedding_logger.debug(f"Requesting {k} results")
         
-        if not self.vector_store:
-            error_msg = "Vector store not initialized"
-            embedding_logger.error(error_msg)
-            raise ValueError(error_msg)
-            
         try:
-            results = self.vector_store.similarity_search(query, k=k)
+            vector_store = db_service.get_vector_store()
+            results = vector_store.similarity_search(query, k=k)
             embedding_logger.info(f"Found {len(results)} similar documents")
             return results
         except Exception as e:
             embedding_logger.error(f"Error during similarity search: {str(e)}")
             raise 
-
 
 embedding_service = EmbeddingService()

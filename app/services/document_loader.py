@@ -3,13 +3,12 @@
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from typing import List, Dict, Optional
-from app.core.config import get_settings
+from app.core.config import settings
 from app.utils.logger import document_logger
 import os
 from datetime import datetime
 import pytz
 
-settings = get_settings()
 
 
 class SimpleTextLoader:

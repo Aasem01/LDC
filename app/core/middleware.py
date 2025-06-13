@@ -1,13 +1,11 @@
 from fastapi import Request, HTTPException
 from fastapi.security import APIKeyHeader
 from fastapi.responses import JSONResponse
-from app.core.config import get_settings
+from app.core.config import settings
 from app.utils.logger import api_logger
 from typing import Dict, Any, Optional
-
 from app.utils.time_manager import measure_time
 
-settings = get_settings()
 api_key_header = APIKeyHeader(name="X-API-Key")
 
 # Paths that don't require API key validation
