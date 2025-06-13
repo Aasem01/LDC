@@ -14,11 +14,13 @@ from app.models.chroma_schemas import (
     ChromaInfoResponse,
     ProcessingStats
 )
+from app.utils.time_manager import measure_time
 
 # Create router
 chroma_router = APIRouter(tags=["chroma"], prefix="/chroma")
 
 # ChromaDB CRUD Endpoints
+@measure_time
 @chroma_router.get("/documents", response_model=DocumentListResponse)
 async def get_all_documents():
     """Get all documents from ChromaDB"""
@@ -28,6 +30,7 @@ async def get_all_documents():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.get("/info", response_model=ChromaInfoResponse)
 async def get_chroma_info():
     """Get information about the ChromaDB collection"""
@@ -36,6 +39,7 @@ async def get_chroma_info():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.delete("/all")
 async def delete_all_documents():
     """Delete all documents from ChromaDB"""
@@ -45,6 +49,7 @@ async def delete_all_documents():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.post("/sync", response_model=ProcessingStats)
 async def sync_documents(force: bool = Query(False, description="Force re-embedding of all files")):
     """
@@ -76,6 +81,7 @@ async def sync_documents(force: bool = Query(False, description="Force re-embedd
         api_logger.error(f"Error syncing documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.post("/text")
 async def add_text(request: DocumentRequest):
     """Add a new free text to ChromaDB"""
@@ -89,6 +95,7 @@ async def add_text(request: DocumentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.post("/upload", response_model=UploadResponse)
 async def upload_document(file: UploadFile = File(...)):
     """
@@ -165,6 +172,7 @@ async def upload_document(file: UploadFile = File(...)):
         api_logger.error(f"Error processing uploaded file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.delete("/document/{document_id}")
 async def delete_document(document_id: str):
     """Delete a specific document from ChromaDB"""
@@ -174,6 +182,7 @@ async def delete_document(document_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@measure_time
 @chroma_router.put("/document/{document_id}")
 async def update_document(document_id: str, request: DocumentUpdateRequest):
     """Update an existing document in ChromaDB"""

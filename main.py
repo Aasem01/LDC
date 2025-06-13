@@ -2,23 +2,18 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.rag_routes import rag_router as rag_router
 from app.api.chroma_routes import chroma_router as chroma_router
-from app.core.config import get_settings
+from app.core.config import settings
 from app.core.middleware import validate_api_key
 from app.services.document_loader import document_loader
 from app.services.chroma_service import chroma_service
 from app.services.embedding_service import embedding_service
+from app.utils.check_ports import is_port_in_use
 from app.utils.logger import api_logger
 import os
 from contextlib import asynccontextmanager
 import uvicorn
-import socket
 import sys
 
-settings = get_settings()
-
-def is_port_in_use(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,7 +42,6 @@ async def lifespan(app: FastAPI):
     
     yield  # This is where the application runs
     
-    # Cleanup code (if needed) would go here
 
 app = FastAPI(
     title="LDC Technical Assessment",

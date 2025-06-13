@@ -2,10 +2,12 @@ from fastapi import APIRouter, HTTPException
 from app.services.rag_service import rag_service
 from app.utils.logger import api_logger
 from app.models.rag_schemas import QueryRequest, QueryResponse
+from app.utils.time_manager import measure_time
 
 # Create router
 rag_router = APIRouter(tags=["rag"], prefix="/rag")
 
+@measure_time
 @rag_router.post("/rag_chat", response_model=QueryResponse)
 async def query(request: QueryRequest):
     """

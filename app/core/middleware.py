@@ -5,6 +5,8 @@ from app.core.config import get_settings
 from app.utils.logger import api_logger
 from typing import Dict, Any, Optional
 
+from app.utils.time_manager import measure_time
+
 settings = get_settings()
 api_key_header = APIKeyHeader(name="X-API-Key")
 
@@ -27,7 +29,7 @@ def create_error_response(status_code: int, detail: str, error_type: str) -> Dic
             "code": status_code
         }
     }
-
+@measure_time
 async def validate_api_key(request: Request) -> Optional[JSONResponse]:
     """
     Middleware to validate API key and request origin.
