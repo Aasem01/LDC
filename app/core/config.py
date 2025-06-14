@@ -45,7 +45,7 @@ class AppSettings(BaseSettings):
     API_KEY: str = Field(default="", description="API key for OpenAI")
 
     # Database URL (for SQLAlchemy)
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: Optional[str] = f"sqlite:///./data/SQLite_instance/chat.db"
     
     class Config:
         env_file = ".env"
