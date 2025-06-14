@@ -11,7 +11,8 @@ from app.models.chroma_schemas import (
     DocumentListResponse,
     UploadResponse,
     ChromaInfoResponse,
-    ProcessingStats
+    ProcessingStats,
+    DocumentResponse
 )
 from app.utils.time_manager import measure_time
 
@@ -28,7 +29,16 @@ async def get_all_documents(app: Application = Depends(get_application)):
     """Get all documents from ChromaDB"""
     try:
         documents = app.chroma_service.get_all_documents()
-        return DocumentListResponse(documents=documents)
+        # Convert Document objects to DocumentResponse objects
+        document_responses = [
+            DocumentResponse(
+                id=doc.metadata.get('id', ''),
+                content=doc.page_content,
+                metadata=doc.metadata
+            )
+            for doc in documents
+        ]
+        return DocumentListResponse(documents=document_responses)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -9,6 +9,7 @@ namespace ChatBotAPI.Services
     {
         Task<T?> PostAsync<T>(string endpoint, object data);
         Task<T?> GetAsync<T>(string endpoint);
+        Task<T?> PostMultipartAsync<T>(string endpoint, MultipartFormDataContent content);
     }
 
     public class PythonBackendService : IPythonBackendService
@@ -88,6 +89,35 @@ namespace ChatBotAPI.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error making POST request to Python backend: {Endpoint}", endpoint);
+                throw;
+            }
+        }
+
+        public async Task<T?> PostMultipartAsync<T>(string endpoint, MultipartFormDataContent content)
+        {
+            try
+            {
+                var fullUrl = GetFullUrl(endpoint);
+                _logger.LogDebug("Making multipart POST request to {FullUrl}", fullUrl);
+                
+                var response = await _httpClient.PostAsync(endpoint, content);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Error response from Python backend: {StatusCode} - {Content}", 
+                        response.StatusCode, errorContent);
+                    response.EnsureSuccessStatusCode();
+                }
+                
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug("Response content: {Content}", responseContent);
+                
+                return JsonSerializer.Deserialize<T>(responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error making multipart POST request to Python backend: {Endpoint}", endpoint);
                 throw;
             }
         }

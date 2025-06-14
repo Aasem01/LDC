@@ -78,32 +78,53 @@ class ChromaService(BaseService, IVectorStore):
             embedding_function=self._embedding_model.model
         )
     
-    def sync_directory(self, directory: str) -> None:
+    def sync_directory(self, directory: str) -> Dict[str, int]:
         """Sync documents from a directory to the vector store"""
         if not self.is_initialized:
             raise RuntimeError("ChromaService not initialized")
             
         if not os.path.exists(directory):
             self.logger.warning(f"Directory {directory} does not exist")
-            return
+            return {
+                "total_files": 0,
+                "processed_files": 0,
+                "skipped_files": 0,
+                "error_files": 0
+            }
+        
+        stats = {
+            "total_files": 0,
+            "processed_files": 0,
+            "skipped_files": 0,
+            "error_files": 0
+        }
             
         for filename in os.listdir(directory):
             if filename.endswith('.txt'):
+                stats["total_files"] += 1
                 file_path = os.path.join(directory, filename)
-                if not self.is_file_processed(file_path):
-                    self.logger.info(f"Processing new file: {filename}")
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        doc = Document(
-                            page_content=content,
-                            metadata={
-                                'source': file_path,
-                                'filename': filename
-                            }
-                        )
-                        self.add_documents([doc])
-                else:
-                    self.logger.info(f"File already processed: {filename}")
+                try:
+                    if not self.is_file_processed(file_path):
+                        self.logger.info(f"Processing new file: {filename}")
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            doc = Document(
+                                page_content=content,
+                                metadata={
+                                    'source': file_path,
+                                    'filename': filename
+                                }
+                            )
+                            self.add_documents([doc])
+                        stats["processed_files"] += 1
+                    else:
+                        self.logger.info(f"File already processed: {filename}")
+                        stats["skipped_files"] += 1
+                except Exception as e:
+                    self.logger.error(f"Error processing file {filename}: {str(e)}")
+                    stats["error_files"] += 1
+        
+        return stats
     
     def is_file_processed(self, file_path: str) -> bool:
         """Check if a file has been processed"""

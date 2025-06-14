@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import router
 from app.core.application import Application
@@ -10,26 +10,42 @@ from app.utils.check_ports import is_port_in_use
 from app.utils.logger import api_logger
 import uvicorn
 import sys
+from pathlib import Path
+import asyncio
+from app.core.middleware import validate_api_key
+
 
 # Get configuration
 config = Configuration()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan event handler for FastAPI application"""
+    """Lifespan context manager for startup and shutdown events"""
     try:
-        # Ensure data directory exists
-        raw_dir = os.path.join("data", "raw")
-        if not os.path.exists(raw_dir):
-            os.makedirs(raw_dir)
-            api_logger.info(f"Created directory: {raw_dir}")
-        
-        # Initialize application services
+        # Initialize application
+        api_logger.info("Starting the application...")
         app_instance = Application.get_instance()
+        
+        # Ensure data/raw directory exists
+        raw_dir = Path("data/raw")
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize services
         app_instance.initialize_services()
         
         # Sync documents from raw directory
-        app_instance.chroma_service.sync_directory(raw_dir)
+        app_instance.chroma_service.sync_directory("data/raw")
+        
+        # # Debug: Print all documents in Chroma
+        api_logger.info("=== Debug: Chroma Database Contents ===")
+        all_docs = app_instance.chroma_service.get_all_documents()
+        api_logger.info(f"Total documents in Chroma: {len(all_docs)}")
+        # for doc in all_docs:
+        #     api_logger.info(f"Document ID: {doc.metadata.get('file_id', 'N/A')}")
+        #     api_logger.info(f"Source: {doc.metadata.get('source', 'N/A')}")
+        #     api_logger.info(f"Content preview: {doc.page_content[:200]}...")
+        #     api_logger.info("---")
+        # api_logger.info("=== End Debug: Chroma Database Contents ===")
         
         api_logger.info("Application startup complete")
         yield
@@ -37,36 +53,29 @@ async def lifespan(app: FastAPI):
         api_logger.error(f"Error during startup: {str(e)}")
         raise
     finally:
-        try:
-            app_instance = Application.get_instance()
-            app_instance.shutdown_services()
-            api_logger.info("Application shutdown complete")
-        except Exception as e:
-            api_logger.error(f"Error during shutdown: {str(e)}")
-            raise
+        # Shutdown services
+        api_logger.info("Shutting down services...")
+        app_instance.shutdown_services()
+        api_logger.info("Application shutdown complete")
 
 # Create FastAPI app
-app = FastAPI(
-    title="LDC Technical Assessment",
-    description="RAG Chatbot System API",
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:7000", "http://127.0.0.1:7000", "localhost:7000", "127.0.0.1:7000"],
+    allow_origins=Configuration().settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["X-API-Key", "Content-Type", "Accept"],
-    expose_headers=["*"],
-    max_age=3600,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# Add API key middleware
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
-    """Middleware to validate API key and origin for all requests"""
+    """
+    Middleware to validate API key and origin for all requests
+    """
     api_logger.info(f"Processing request: {request.method} {request.url.path}")
     api_logger.info(f"Request headers: {dict(request.headers)}")
     
@@ -79,7 +88,10 @@ async def api_key_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# Add API router
+# Add request logging middleware
+app.middleware("http")
+
+# Include API router
 app.include_router(router)
 
 if __name__ == "__main__":
