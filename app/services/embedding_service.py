@@ -6,6 +6,7 @@ from app.services.db_service import db_service
 from app.utils.logger import embedding_logger, api_logger
 from app.core.interfaces import IEmbeddingModel, IConfiguration
 from app.core.base_service import BaseService
+from langchain_openai import OpenAIEmbeddings
 
 
 
@@ -27,14 +28,41 @@ class EmbeddingService(BaseService, IEmbeddingModel):
         """Initialize the embedding model"""
         try:
             self.logger.info("Initializing embedding model")
+            if self.config.settings.USE_HUGGINGFACE:
+                self._setup_huggingface_embeddings()
+            else:
+                self._setup_openai_embeddings()
+            self.logger.info("Successfully initialized embedding model")
+        except Exception as e:
+            self.logger.error(f"Error initializing embedding model: {str(e)}")
+            raise
+
+    def _setup_huggingface_embeddings(self) -> None:
+        """Set up Hugging Face embeddings model"""
+        try:
+            self.logger.info("Setting up Hugging Face embeddings model")
             self._model = HuggingFaceEmbeddings(
                 model_name=self.config.settings.HUGGINGFACE_MODEL_NAME,
                 model_kwargs={'device': 'cpu'},
                 encode_kwargs={'normalize_embeddings': True}
             )
-            self.logger.info("Successfully initialized embedding model")
+            self.logger.info("Successfully initialized Hugging Face embeddings model")
         except Exception as e:
-            self.logger.error(f"Error initializing embedding model: {str(e)}")
+            self.logger.error(f"Error setting up Hugging Face embeddings model: {str(e)}")
+            raise
+
+    def _setup_openai_embeddings(self) -> None:
+        """Set up OpenAI embeddings model"""
+        try:
+            self.logger.info("Setting up OpenAI embeddings model")
+            self._model = OpenAIEmbeddings(
+                model=self.config.settings.OPENAI_EMBEDDING_MODEL_NAME,
+                api_key=self.config.settings.OPENAI_API_KEY_FOR_EMBEDDING,
+                # api_base=self.config.settings.OPENAI_API_BASE,
+            )
+            self.logger.info("Successfully initialized OpenAI embeddings model")
+        except Exception as e:
+            self.logger.error(f"Error setting up OpenAI embeddings model: {str(e)}")
             raise
     
     def _shutdown(self) -> None:
@@ -54,7 +82,7 @@ class EmbeddingService(BaseService, IEmbeddingModel):
         return self._model.embed_query(text)
     
     @property
-    def model(self) -> HuggingFaceEmbeddings:
+    def model(self) -> HuggingFaceEmbeddings | OpenAIEmbeddings:
         """Get the embedding model"""
         if not self.is_initialized:
             raise RuntimeError("EmbeddingService not initialized")

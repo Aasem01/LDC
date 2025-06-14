@@ -13,7 +13,7 @@ class AppSettings(BaseSettings):
     API_PORT: int = 8000
     
     # Security Settings
-    ALLOWED_ORIGINS: List[str] = ["http://127.0.0.1:7000", "http://localhost:7000"]
+    ALLOWED_ORIGINS: List[str] = ["http://127.0.0.1:7000", "http://localhost:7000", "testclient"]
     
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = None
@@ -43,7 +43,14 @@ class AppSettings(BaseSettings):
     
     # API Keys
     API_KEY: str = Field(default="", description="API key for OpenAI")
+
+    # Database URL (for SQLAlchemy)
+    DATABASE_URL: Optional[str] = None
     
+    USE_EMBEDDING_MODE_OPENAI: bool = True
+    OPENAI_API_KEY_FOR_EMBEDDING: Optional[str] = None
+    OPENAI_EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
@@ -61,6 +68,13 @@ class AppSettings(BaseSettings):
             api_logger.warning(f".env file not found at {env_path}")
         
         super().__init__(_env_file=str(env_path), **kwargs)
+        
+        # Set up database path
+        db_dir = project_root / "data" / "SQLite_instance"
+        db_dir.mkdir(parents=True, exist_ok=True)
+        db_path = db_dir / "chat.db"
+        self.DATABASE_URL = f"sqlite:///{db_path.absolute()}"
+        
         api_logger.info("Loading settings from environment variables...")
         api_logger.info(f"API_KEY: {'*' * 8}{self.API_KEY[-4:] if self.API_KEY else 'Not set'}")
         api_logger.info(f"DEEPSEEK_API_KEY: {'*' * 8}{self.DEEPSEEK_API_KEY[-4:] if self.DEEPSEEK_API_KEY else 'Not set'}")
@@ -69,6 +83,7 @@ class AppSettings(BaseSettings):
         api_logger.info(f"HF_DEEPSEEK_MODEL_NAME: {self.HF_DEEPSEEK_MODEL_NAME}")
         api_logger.info(f"OPENAI_API_BASE: {self.OPENAI_API_BASE}")
         api_logger.info(f"ALLOWED_ORIGINS: {self.ALLOWED_ORIGINS}")
+        api_logger.info(f"DATABASE_URL: {self.DATABASE_URL}")
         self.validate_api_keys()
     
     def validate_api_keys(self):

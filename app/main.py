@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 import asyncio
 from app.core.middleware import validate_api_key
+from app.core.database import init_db
+from app.api.interactions import interactions_router
 
 
 # Get configuration
@@ -42,6 +44,10 @@ async def lifespan(app: FastAPI):
         all_docs = app_instance.chroma_service.get_all_documents()
         api_logger.info(f"Total documents in Chroma: {len(all_docs)}")
         api_logger.info("Application startup complete")
+
+        # Initialize database
+        init_db()
+
         yield
     except Exception as e:
         api_logger.error(f"Error during startup: {str(e)}")
@@ -53,12 +59,12 @@ async def lifespan(app: FastAPI):
         api_logger.info("Application shutdown complete")
 
 # Create FastAPI app
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, title="Chat API")
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Configuration().settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,7 +94,11 @@ app.middleware("http")
 # Include API router
 app.include_router(rag_router)
 app.include_router(chroma_router)
+app.include_router(interactions_router)
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Chat API"}
 
 if __name__ == "__main__":
     try:
