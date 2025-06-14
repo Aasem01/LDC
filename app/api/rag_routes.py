@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException
-from app.services.rag_service import rag_service
+from fastapi import APIRouter, HTTPException, Depends
+from app.core.application import Application
 from app.utils.logger import api_logger
 from app.models.rag_schemas import QueryRequest, QueryResponse
 from app.utils.time_manager import measure_time
@@ -7,9 +7,16 @@ from app.utils.time_manager import measure_time
 # Create router
 rag_router = APIRouter(tags=["rag"], prefix="/rag")
 
+def get_application() -> Application:
+    """Dependency to get the application instance"""
+    return Application.get_instance()
+
 @measure_time
 @rag_router.post("/rag_chat", response_model=QueryResponse)
-async def query(request: QueryRequest):
+async def query(
+    request: QueryRequest,
+    app: Application = Depends(get_application)
+):
     """
     Query the RAG system with a question.
     
@@ -21,7 +28,7 @@ async def query(request: QueryRequest):
     """
     api_logger.info(f"Received request from user {request.user_id}\nquestion: {request.question}")
     try:
-        result = await rag_service.get_answer(request.question)
+        result = await app.rag_service.get_answer(request.question)
         api_logger.info("Successfully processed query")
         api_logger.debug(f"Found {len(result['source_documents'])} relevant documents")
         return QueryResponse(**result)

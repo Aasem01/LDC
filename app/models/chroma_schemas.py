@@ -42,3 +42,6 @@ class ChromaInfoResponse(BaseModel):
     total_documents: int
     collection_name: str
     embedding_dimension: int 
+    persist_directory: str
+    total_chunks: int
+    total_files: int

@@ -28,7 +28,7 @@ if not exist logs mkdir logs
 
 :: Run the application
 echo Starting the application...
-python main.py
+python -m app.main
 
 :: Deactivate virtual environment on exit
 call venv\Scripts\deactivate

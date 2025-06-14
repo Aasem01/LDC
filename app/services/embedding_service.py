@@ -1,52 +1,64 @@
-from typing import List
+from typing import List, Optional
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.schema import Document
 from app.core.config import settings
 from app.services.db_service import db_service
-from app.utils.logger import embedding_logger
+from app.utils.logger import embedding_logger, api_logger
+from app.core.interfaces import IEmbeddingModel, IConfiguration
+from app.core.base_service import BaseService
 
 
 
-class EmbeddingService:
+class EmbeddingService(BaseService, IEmbeddingModel):
+    """Service for handling document and query embeddings"""
     _instance = None
-    _embeddings = None
-
-    def __new__(cls):
+    
+    def __new__(cls, config: IConfiguration):
         if cls._instance is None:
             cls._instance = super(EmbeddingService, cls).__new__(cls)
-            embedding_logger.info("Creating new EmbeddingService instance")
         return cls._instance
-
-    def __init__(self):
+    
+    def __init__(self, config: IConfiguration):
         if not hasattr(self, 'initialized'):
-            embedding_logger.info("Initializing EmbeddingService")
-            self._initialize_embeddings()
-            self.initialized = True
-
-    def _initialize_embeddings(self):
-        """Initialize the embeddings model"""
-        if self._embeddings is None:
-            embedding_logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL_NAME}")
-            try:
-                self._embeddings = HuggingFaceEmbeddings(
-                    model_name=settings.EMBEDDING_MODEL_NAME
-                )
-                embedding_logger.info("Successfully loaded embeddings model")
-                
-                # Initialize database service with embeddings
-                if not db_service.is_initialized():
-                    db_service.initialize(self._embeddings)
-            except Exception as e:
-                embedding_logger.error(f"Error loading embeddings model: {str(e)}")
-                raise
-
+            super().__init__(config, "embedding_service")
+            self._model = None
+    
+    def _initialize(self) -> None:
+        """Initialize the embedding model"""
+        try:
+            self.logger.info("Initializing embedding model")
+            self._model = HuggingFaceEmbeddings(
+                model_name=self.config.settings.HUGGINGFACE_MODEL_NAME,
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+            self.logger.info("Successfully initialized embedding model")
+        except Exception as e:
+            self.logger.error(f"Error initializing embedding model: {str(e)}")
+            raise
+    
+    def _shutdown(self) -> None:
+        """Clean up resources"""
+        self._model = None
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed a list of documents"""
+        if not self.is_initialized:
+            raise RuntimeError("EmbeddingService not initialized")
+        return self._model.embed_documents(texts)
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a query"""
+        if not self.is_initialized:
+            raise RuntimeError("EmbeddingService not initialized")
+        return self._model.embed_query(text)
+    
     @property
-    def embeddings(self):
-        return self._embeddings
-
-    @property
-    def vector_store(self):
-        return db_service.vector_store
+    def model(self) -> HuggingFaceEmbeddings:
+        """Get the embedding model"""
+        if not self.is_initialized:
+            raise RuntimeError("EmbeddingService not initialized")
+        return self._model
 
     def create_vector_store(self, documents: List[Document]) -> None:
         """
@@ -60,7 +72,7 @@ class EmbeddingService:
         
         try:
             # Initialize the database service with embeddings
-            db_service.initialize(self.embeddings)
+            db_service.initialize(self.model)
             
             # Add documents to the vector store
             vector_store = db_service.get_vector_store()
@@ -94,5 +106,3 @@ class EmbeddingService:
         except Exception as e:
             embedding_logger.error(f"Error during similarity search: {str(e)}")
             raise 
-
-embedding_service = EmbeddingService()

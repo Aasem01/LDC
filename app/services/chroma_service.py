@@ -1,167 +1,59 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from langchain.schema import Document
-from app.core.config import settings
-from app.services.document_loader import document_loader
-from app.services.db_service import db_service
-from app.utils.logger import chroma_logger
+from langchain_chroma import Chroma
+from langchain.schema.retriever import BaseRetriever
+from app.core.interfaces import IVectorStore, IConfiguration, IEmbeddingModel
+from app.core.base_service import BaseService
+from app.services.document_loader import SimpleTextLoader
 import os
-import shutil
+import hashlib
+import json
 from datetime import datetime
 import pytz
+from app.utils.time_manager import get_current_timestamp
 
-
-class ChromaService:
-    def __init__(self):
-        self.persist_directory = settings.CHROMA_PERSIST_DIRECTORY
-        self.embeddings = None  # Will be set by EmbeddingService
-
-    def initialize(self, embeddings):
-        """Initialize the ChromaDB service with embeddings"""
-        self.embeddings = embeddings
+class ChromaService(BaseService, IVectorStore):
+    """Service for handling vector store operations using ChromaDB"""
+    _instance = None
+    
+    def __new__(cls, config: IConfiguration, embedding_model: IEmbeddingModel, document_loader: SimpleTextLoader):
+        if cls._instance is None:
+            cls._instance = super(ChromaService, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self, config: IConfiguration, embedding_model: IEmbeddingModel, document_loader: SimpleTextLoader):
+        if not hasattr(self, 'initialized'):
+            super().__init__(config, "chroma_service")
+            self._embedding_model = embedding_model
+            self._vector_store = None
+            self._persist_directory = config.settings.CHROMA_PERSIST_DIRECTORY
+            self._document_loader = document_loader
+    
+    def _initialize(self) -> None:
+        """Initialize the vector store"""
         try:
-            # Initialize database if not already initialized
-            if not db_service.is_initialized():
-                db_service.initialize(embeddings)
-            chroma_logger.info("ChromaDB service initialized successfully")
+            self.logger.info("Initializing ChromaDB")
+            # Ensure persist directory exists
+            os.makedirs(self._persist_directory, exist_ok=True)
+            
+            # Initialize ChromaDB with persistence
+            self._vector_store = Chroma(
+                persist_directory=self._persist_directory,
+                embedding_function=self._embedding_model.model,
+                collection_name="hr_policies"
+            )
+            
+            # Load any existing data
+            # self._vector_store.persist()
+            self.logger.info("Successfully initialized ChromaDB")
         except Exception as e:
-            chroma_logger.error(f"Error initializing ChromaDB: {str(e)}")
+            self.logger.error(f"Error initializing ChromaDB: {str(e)}")
             raise
-
-    def _get_current_timestamp(self) -> str:
-        """Get current timestamp in ISO format"""
-        return datetime.now(pytz.UTC).isoformat()
-
-    def _should_update_document(self, file_path: str, existing_metadata: Optional[Dict] = None) -> bool:
-        """Check if document should be updated based on file timestamp"""
-        if not existing_metadata or 'updated_at' not in existing_metadata:
-            return True
-        
-        current_time = datetime.now(pytz.UTC)
-        stored_datetime = datetime.fromisoformat(existing_metadata['updated_at'])
-        
-        return current_time > stored_datetime
-
-    def is_file_processed(self, filename: str) -> bool:
-        """
-        Check if a file has already been processed and stored in ChromaDB.
-        
-        Args:
-            filename (str): Name of the file to check
-            
-        Returns:
-            bool: True if file exists in ChromaDB, False otherwise
-        """
-        try:
-            vector_store = db_service.get_vector_store()
-            
-            # Get all documents
-            results = vector_store.get()
-            
-            # Check if any document has this filename as source
-            for metadata in results['metadatas']:
-                if metadata.get('source') == filename:
-                    return True
-                    
-            return False
-        except Exception as e:
-            chroma_logger.error(f"Error checking file existence: {str(e)}")
-            raise
-
-    def get_file_documents(self, filename: str) -> List[Dict]:
-        """
-        Get all documents associated with a specific file.
-        
-        Args:
-            filename (str): Name of the file to get documents for
-            
-        Returns:
-            List[Dict]: List of documents associated with the file
-        """
-        try:
-            vector_store = db_service.get_vector_store()
-            
-            # Get all documents
-            results = vector_store.get()
-            documents = []
-            
-            # Filter documents by source filename
-            for i in range(len(results['ids'])):
-                if results['metadatas'][i].get('source') == filename:
-                    doc = {
-                        'id': results['ids'][i],
-                        'content': results['documents'][i],
-                        'metadata': results['metadatas'][i]
-                    }
-                    documents.append(doc)
-            
-            return documents
-        except Exception as e:
-            chroma_logger.error(f"Error getting file documents: {str(e)}")
-            raise
-
-    def get_all_documents(self) -> List[Dict]:
-        """
-        Get all documents from ChromaDB
-        
-        Returns:
-            List[Dict]: List of documents with their metadata
-        """
-        try:
-            vector_store = db_service.get_vector_store()
-            
-            results = vector_store.get()
-            documents = []
-            
-            for i in range(len(results['ids'])):
-                doc = {
-                    "id": results['ids'][i],
-                    "content": results['documents'][i],
-                    "metadata": results['metadatas'][i]
-                }
-                documents.append(doc)
-            
-            return documents
-            
-        except Exception as e:
-            chroma_logger.error(f"Error getting all documents: {str(e)}")
-            raise
-
-    def get_document_info(self) -> Dict:
-        """Get information about the ChromaDB collection"""
-        try:
-            vector_store = db_service.get_vector_store()
-            
-            results = vector_store.get()
-            info = {
-                'total_documents': len(results['ids']),
-                'collection_name': vector_store._collection.name,
-                'embedding_dimension': len(results['embeddings'][0]) if results['embeddings'] else 0,
-                'persist_directory': self.persist_directory
-            }
-            
-            chroma_logger.info(f"Retrieved ChromaDB info: {info}")
-            return info
-        except Exception as e:
-            chroma_logger.error(f"Error retrieving ChromaDB info: {str(e)}")
-            raise
-
-    def delete_all(self):
-        """Delete all data from ChromaDB"""
-        try:
-            vector_store = db_service.get_vector_store()
-            
-            # Get all document IDs
-            results = vector_store.get()
-            if results['ids']:
-                # Delete all documents by their IDs
-                vector_store._collection.delete(ids=results['ids'])
-                vector_store.persist()
-            
-            chroma_logger.info("Successfully deleted all data from ChromaDB")
-        except Exception as e:
-            chroma_logger.error(f"Error deleting ChromaDB data: {str(e)}")
-            raise
-
+    
+    def _shutdown(self) -> None:
+        """Clean up resources"""
+        self._vector_store = None
+    
     def add_document(self, document: Document) -> str:
         """
         Add a document to ChromaDB
@@ -172,45 +64,103 @@ class ChromaService:
         Returns:
             str: ID of the added document
         """
-        try:
-            vector_store = db_service.get_vector_store()
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
             
+        try:
             # Add timestamps to metadata
-            current_time = datetime.now(pytz.UTC).isoformat()
+            current_time = get_current_timestamp()
             document.metadata.update({
                 "created_at": current_time,
                 "updated_at": current_time
             })
             
             # Add document to ChromaDB
-            vector_store.add_documents([document])
-            vector_store.persist()
+            ids = self._vector_store.add_documents([document])
             
-            chroma_logger.info(f"Document added successfully: {document.metadata.get('source', 'Unknown')}")
-            return document.metadata.get("id", "")
+            # Ensure changes are persisted
+            # self._vector_store.persist()
+            
+            self.logger.info(f"Document added successfully: {document.metadata.get('source', 'Unknown')}")
+            return ids[0] if ids else ""
             
         except Exception as e:
-            chroma_logger.error(f"Error adding document: {str(e)}")
+            self.logger.error(f"Error adding document: {str(e)}")
             raise
-
-    def delete_document(self, document_id: str):
-        """Delete a specific document from ChromaDB"""
+    
+    def add_documents(self, documents: List[Document]) -> None:
+        """Add documents to the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        for doc in documents:
+            self.add_document(doc)
+    
+    def similarity_search(self, query: str, k: int = 4) -> List[Document]:
+        """Search for similar documents"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        return self._vector_store.similarity_search(query, k=k)
+    
+    def get_all_documents(self) -> List[Document]:
+        """Get all documents from the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        
+        # Get all documents from ChromaDB
+        results = self._vector_store.get()
+        
+        # If no documents found, return empty list
+        if not results or not results.get('documents'):
+            return []
+            
+        documents = []
+            
+        for i in range(len(results['ids'])):
+            doc = {
+                "id": results['ids'][i],
+                "content": results['documents'][i],
+                "metadata": results['metadatas'][i]
+            }
+            documents.append(doc)
+        
+        return documents
+    
+    def delete_document(self, document_id: str) -> None:
+        """Delete a document from the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
         try:
-            vector_store = db_service.get_vector_store()
+            self._vector_store._collection.delete(ids=[document_id])
+            # self._vector_store.persist()
             
-            vector_store._collection.delete(ids=[document_id])
-            vector_store.persist()
-            
-            chroma_logger.info(f"Successfully deleted document with ID: {document_id}")
+            self.logger.info(f"Successfully deleted document with ID: {document_id}")
         except Exception as e:
-            chroma_logger.error(f"Error deleting document: {str(e)}")
+            self.logger.error(f"Error deleting document: {str(e)}")
             raise
-
-    def update_document(self, document_id: str, new_content: str, new_metadata: Optional[Dict] = None):
+    
+    def delete_all(self) -> None:
+        """Delete all documents from the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        try:
+            # Get all document IDs
+            results = self._vector_store.get()
+            if results['ids']:
+                # Delete all documents by their IDs
+                self._vector_store._collection.delete(ids=results['ids'])
+                # self._vector_store.persist()
+            
+            self.logger.info("Successfully deleted all data from ChromaDB")
+        except Exception as e:
+            self.logger.error(f"Error deleting ChromaDB data: {str(e)}")
+            raise
+    
+    def update_document(self, document_id: str, new_content: str, new_metadata: Optional[Dict] = None) -> None:
         """Update an existing document in ChromaDB"""
-        try:
-            vector_store = db_service.get_vector_store()
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
             
+        try:
             # First delete the old document
             self.delete_document(document_id)
             
@@ -218,7 +168,7 @@ class ChromaService:
             if not new_metadata:
                 new_metadata = {}
             
-            new_metadata['updated_at'] = self._get_current_timestamp()
+            new_metadata['updated_at'] = get_current_timestamp()
             
             new_doc = Document(
                 page_content=new_content,
@@ -226,96 +176,158 @@ class ChromaService:
             )
             self.add_document(new_doc)
             
-            chroma_logger.info(f"Successfully updated document with ID: {document_id}")
+            self.logger(f"Successfully updated document with ID: {document_id}")
         except Exception as e:
-            chroma_logger.error(f"Error updating document: {str(e)}")
+            self.logger.error(f"Error updating document: {str(e)}")
             raise
-
-    def sync_directory(self, directory_path: str) -> Dict:
-        """
-        Synchronize all files in the directory with ChromaDB.
-        This will process all .txt files in the directory and update ChromaDB accordingly.
-        
-        Args:
-            directory_path (str): Path to the directory containing txt files
+    
+    def sync_directory(self, directory: str) -> Dict[str, int]:
+        """Sync documents from a directory to the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
             
-        Returns:
-            Dict: Processing statistics
-        """
-        try:
-            vector_store = db_service.get_vector_store()
+        # Ensure directory exists
+        os.makedirs(directory, exist_ok=True)
             
-            # Ensure directory exists
-            if not os.path.exists(directory_path):
-                os.makedirs(directory_path)
-                return {
-                    "total_files": 0,
-                    "processed_files": 0,
-                    "skipped_files": 0,
-                    "error_files": 0
-                }
-            
-            stats = {
+        if not os.path.exists(directory):
+            self.logger.warning(f"Directory {directory} does not exist")
+            return {
                 "total_files": 0,
                 "processed_files": 0,
                 "skipped_files": 0,
                 "error_files": 0
             }
+        
+        stats = {
+            "total_files": 0,
+            "processed_files": 0,
+            "skipped_files": 0,
+            "error_files": 0
+        }
             
-            # Process all txt files
-            for filename in os.listdir(directory_path):
-                if not filename.endswith('.txt'):
-                    continue
-                    
+        for filename in os.listdir(directory):
+            if filename.endswith('.txt'):
                 stats["total_files"] += 1
-                file_path = os.path.join(directory_path, filename)
-                
+                file_path = os.path.join(directory, filename)
                 try:
-                    # Check if file has already been processed
-                    if self.is_file_processed(filename):
-                        existing_docs = self.get_file_documents(filename)
-                        stats["skipped_files"] += len(existing_docs)
-                        continue
-                    
-                    # Read file content
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    
-                    # Create document
-                    document = Document(
-                        page_content=content,
-                        metadata={
-                            "source": filename,
-                            "file_modified_at": datetime.now(pytz.UTC).isoformat(),
-                            "document_type": "hr_policy",
-                            "content_type": "text/plain"
-                        }
-                    )
-                    
-                    # Split document into chunks using the singleton instance
-                    split_docs = document_loader.split_documents([document])
-                    
-                    # Add documents to ChromaDB
-                    for doc in split_docs:
-                        # Check if document needs updating based on filename
-                        if self._should_update_document(filename, doc.metadata):
+                    if not self.is_file_processed(file_path):
+                        self.logger.info(f"Processing new file: {filename}")
+                        # Process the file using document loader
+                        document = self._document_loader.load_file(file_path)
+                        split_docs = self._document_loader.split_documents([document])
+                        
+                        # Add documents to ChromaDB
+                        for doc in split_docs:
+                            # Add source file information to metadata
+                            doc.metadata.update({
+                                "source": filename,
+                                "file_modified_at": get_current_timestamp(),
+                                "document_type": "hr_policy",
+                                "content_type": "text/plain"
+                            })
                             self.add_document(doc)
                             stats["processed_files"] += 1
-                        else:
-                            stats["skipped_files"] += 1
-                    
-                    chroma_logger.info(f"Successfully processed file: {filename}")
-                    
+                    else:
+                        self.logger.info(f"File already processed: {filename}")
+                        stats["skipped_files"] += 1
                 except Exception as e:
-                    chroma_logger.error(f"Error processing file {filename}: {str(e)}")
+                    self.logger.error(f"Error processing file {filename}: {str(e)}")
                     stats["error_files"] += 1
-                    continue
+        
+        return stats
+    
+    def is_file_processed(self, file_path: str) -> bool:
+        """Check if a file has been processed"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
             
-            chroma_logger.info(f"Directory sync complete. Stats: {stats}")
-            return stats
+        try:
+            # Get the filename from the path
+            filename = os.path.basename(file_path)
+            
+            # Check if any documents exist with this filename in metadata
+            results = self._vector_store.get(
+                where={"source": filename}
+            )
+            
+            return len(results.get('documents', [])) > 0
+        except Exception as e:
+            self.logger.error(f"Error checking if file is processed: {str(e)}")
+            return False
+    
+    def get_file_documents(self, file_path: str) -> List[Document]:
+        """Get all documents associated with a file"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+            
+        return self._vector_store.get(
+            where={"source": file_path}
+        )
+    
+    def _get_file_hash(self, file_path: str) -> str:
+        """Get the hash of a file"""
+        with open(file_path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+    
+    def _should_update_document(self, file_path: str) -> bool:
+        """Check if a document should be updated"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+            
+        try:
+            # Get existing documents for this file
+            existing_docs = self._vector_store.get(
+                where={"source": file_path}
+            )
+            
+            # If no existing documents, we should process it
+            if not existing_docs or not existing_docs.get('documents'):
+                return True
+                
+            # Get the hash of the current file
+            current_hash = self._get_file_hash(os.path.join("data", "raw", file_path))
+            
+            # Get the hash from the first document's metadata
+            stored_hash = existing_docs['metadatas'][0].get('hash')
+            
+            # If hashes don't match, we should update
+            return current_hash != stored_hash
             
         except Exception as e:
-            chroma_logger.error(f"Error syncing directory: {str(e)}")
-            raise
+            self.logger.error(f"Error checking if document should be updated: {str(e)}")
+            return True  # If there's an error, we should process the file
+    
+    def as_retriever(self, **kwargs) -> BaseRetriever:
+        """Get a retriever interface for the vector store"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        return self._vector_store.as_retriever(**kwargs)
+    
+    @property
+    def vector_store(self) -> Chroma:
+        """Get the vector store instance"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+        return self._vector_store
 
-chroma_service = ChromaService()
+    def get_document_info(self) -> Dict[str, Any]:
+        """Get information about the ChromaDB collection"""
+        if not self.is_initialized:
+            raise RuntimeError("ChromaService not initialized")
+            
+        try:
+            results = self._vector_store.get()
+            info = {
+                'total_documents': len(results['ids']),
+                'total_chunks': len(results['ids']),
+                'collection_name': self._vector_store._collection.name,
+                'embedding_dimension': len(results['embeddings'][0]) if results['embeddings'] else 0,
+                'persist_directory': self._persist_directory,
+                'total_files': len(os.listdir(self._persist_directory))
+            }
+            
+            self.logger.info(f"Retrieved ChromaDB info: {info}")
+            return info
+        except Exception as e:
+            self.logger.error(f"Error retrieving ChromaDB info: {str(e)}")
+            raise
