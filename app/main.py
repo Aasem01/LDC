@@ -15,7 +15,7 @@ from pathlib import Path
 import asyncio
 from app.core.middleware import validate_api_key
 from app.core.database import init_db
-from app.api.endpoints import interactions
+from app.api.interactions import interactions_router
 
 
 # Get configuration
@@ -94,7 +94,7 @@ app.middleware("http")
 # Include API router
 app.include_router(rag_router)
 app.include_router(chroma_router)
-app.include_router(interactions.router, prefix="/api/v1", tags=["interactions"])
+app.include_router(interactions_router)
 
 @app.get("/")
 def read_root():
