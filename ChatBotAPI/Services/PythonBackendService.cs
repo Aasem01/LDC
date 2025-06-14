@@ -10,6 +10,7 @@ namespace ChatBotAPI.Services
         Task<T?> PostAsync<T>(string endpoint, object data);
         Task<T?> GetAsync<T>(string endpoint);
         Task<T?> PostMultipartAsync<T>(string endpoint, MultipartFormDataContent content);
+        Task<T?> DeleteAsync<T>(string endpoint);
     }
 
     public class PythonBackendService : IPythonBackendService
@@ -149,6 +150,37 @@ namespace ChatBotAPI.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error making GET request to Python backend: {Endpoint}", endpoint);
+                throw;
+            }
+        }
+
+        public async Task<T?> DeleteAsync<T>(string endpoint)
+        {
+            try
+            {
+                var fullUrl = GetFullUrl(endpoint);
+                _logger.LogDebug("Making DELETE request to {FullUrl} with API key: {ApiKey}", 
+                    fullUrl, 
+                    _httpClient.DefaultRequestHeaders.GetValues("X-API-Key").FirstOrDefault()?.Substring(0, 10) + "...");
+
+                var response = await _httpClient.DeleteAsync(endpoint);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Error response from Python backend: {StatusCode} - {Content}", 
+                        response.StatusCode, errorContent);
+                    response.EnsureSuccessStatusCode();
+                }
+                
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug("Response content: {Content}", responseContent);
+                
+                return JsonSerializer.Deserialize<T>(responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error making DELETE request to Python backend: {Endpoint}", endpoint);
                 throw;
             }
         }

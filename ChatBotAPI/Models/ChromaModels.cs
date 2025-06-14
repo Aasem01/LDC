@@ -61,14 +61,23 @@ namespace ChatBotAPI.Models
 
     public class ChromaInfoResponse
     {
-        [JsonPropertyName("collection_count")]
-        public int CollectionCount { get; set; }
+        [JsonPropertyName("total_documents")]
+        public int TotalDocuments { get; set; }
 
-        [JsonPropertyName("document_count")]
-        public int DocumentCount { get; set; }
+        [JsonPropertyName("total_chunks")]
+        public int TotalChunks { get; set; }
+
+        [JsonPropertyName("collection_name")]
+        public string CollectionName { get; set; } = string.Empty;
 
         [JsonPropertyName("embedding_dimension")]
         public int EmbeddingDimension { get; set; }
+
+        [JsonPropertyName("persist_directory")]
+        public string PersistDirectory { get; set; } = string.Empty;
+
+        [JsonPropertyName("total_files")]
+        public int TotalFiles { get; set; }
     }
 
     public class ProcessingStats

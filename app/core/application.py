@@ -6,6 +6,7 @@ from app.services.embedding_service import EmbeddingService
 from app.services.chroma_service import ChromaService
 from app.services.llm_service import LLMService
 from app.services.rag_service import RAGService
+from app.services.document_loader import SimpleTextLoader
 
 class Application:
     """Main application class that manages service lifecycle"""
@@ -24,6 +25,7 @@ class Application:
             self._chroma_service: Optional[ChromaService] = None
             self._llm_service: Optional[LLMService] = None
             self._rag_service: Optional[RAGService] = None
+            self._document_loader: Optional[SimpleTextLoader] = None
             self.initialized = True
     
     def initialize_services(self) -> None:
@@ -39,8 +41,12 @@ class Application:
             self._llm_service = LLMService(self.config)
             self._llm_service.initialize()
             
+            # Initialize document loader
+            self._document_loader = SimpleTextLoader(self.config)
+            self._document_loader.initialize()
+            
             # Initialize Chroma service
-            self._chroma_service = ChromaService(self.config, self._embedding_service)
+            self._chroma_service = ChromaService(self.config, self._embedding_service, self._document_loader)
             self._chroma_service.initialize()
             
             # Initialize RAG service
@@ -102,6 +108,13 @@ class Application:
         if not self._rag_service:
             raise RuntimeError("RAGService not initialized")
         return self._rag_service
+    
+    @property
+    def document_loader(self) -> SimpleTextLoader:
+        """Get the document loader"""
+        if not self._document_loader:
+            raise RuntimeError("DocumentLoader not initialized")
+        return self._document_loader
     
     @classmethod
     def get_instance(cls) -> 'Application':

@@ -2,7 +2,8 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.router import router
+from app.api.rag_routes import rag_router
+from app.api.chroma_routes import chroma_router
 from app.core.application import Application
 from app.core.config import Configuration
 from app.core.middleware import validate_api_key
@@ -40,13 +41,6 @@ async def lifespan(app: FastAPI):
         api_logger.info("=== Debug: Chroma Database Contents ===")
         all_docs = app_instance.chroma_service.get_all_documents()
         api_logger.info(f"Total documents in Chroma: {len(all_docs)}")
-        # for doc in all_docs:
-        #     api_logger.info(f"Document ID: {doc.metadata.get('file_id', 'N/A')}")
-        #     api_logger.info(f"Source: {doc.metadata.get('source', 'N/A')}")
-        #     api_logger.info(f"Content preview: {doc.page_content[:200]}...")
-        #     api_logger.info("---")
-        # api_logger.info("=== End Debug: Chroma Database Contents ===")
-        
         api_logger.info("Application startup complete")
         yield
     except Exception as e:
@@ -92,7 +86,9 @@ async def api_key_middleware(request: Request, call_next):
 app.middleware("http")
 
 # Include API router
-app.include_router(router)
+app.include_router(rag_router)
+app.include_router(chroma_router)
+
 
 if __name__ == "__main__":
     try:

@@ -34,12 +34,11 @@ class AppSettings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     
     # Vector Store Settings
-    VECTOR_STORE_DIR: str = "data/vector_store"
     CHROMA_PERSIST_DIRECTORY: str = "data/chroma"
     
     # Document Processing Settings
-    CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 200
+    CHUNK_SIZE: int = 500
+    CHUNK_OVERLAP: int = 100
     RAW_DOCUMENTS_DIR: str = "data/raw"
     
     # API Keys

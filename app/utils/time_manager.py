@@ -2,6 +2,8 @@ import time
 import functools
 from typing import Callable, Any
 from app.utils.logger import time_logger
+from datetime import datetime
+import pytz
 
 def measure_time(func: Callable) -> Callable:
     """
@@ -24,3 +26,7 @@ def measure_time(func: Callable) -> Callable:
         return result
     
     return wrapper 
+
+def get_current_timestamp() -> str:
+    """Get current timestamp in ISO format"""
+    return datetime.now(pytz.UTC).isoformat()

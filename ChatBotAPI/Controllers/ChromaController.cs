@@ -61,7 +61,7 @@ namespace ChatBotAPI.Controllers
         {
             try
             {
-                await _pythonBackend.PostAsync<object>("chroma/all", new { });
+                await _pythonBackend.DeleteAsync<object>("chroma/all");
                 return Ok(new { message = "All documents deleted successfully" });
             }
             catch (Exception ex)
@@ -135,7 +135,7 @@ namespace ChatBotAPI.Controllers
         {
             try
             {
-                await _pythonBackend.PostAsync<object>($"chroma/document/{documentId}", new { });
+                await _pythonBackend.DeleteAsync<object>($"chroma/document/{documentId}");
                 return Ok(new { message = $"Document {documentId} deleted successfully" });
             }
             catch (Exception ex)

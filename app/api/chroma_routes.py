@@ -29,17 +29,9 @@ async def get_all_documents(app: Application = Depends(get_application)):
     """Get all documents from ChromaDB"""
     try:
         documents = app.chroma_service.get_all_documents()
-        # Convert Document objects to DocumentResponse objects
-        document_responses = [
-            DocumentResponse(
-                id=doc.metadata.get('id', ''),
-                content=doc.page_content,
-                metadata=doc.metadata
-            )
-            for doc in documents
-        ]
-        return DocumentListResponse(documents=document_responses)
+        return DocumentListResponse(documents=documents)
     except Exception as e:
+        api_logger.error(f"Error getting documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @measure_time
@@ -153,7 +145,7 @@ async def upload_document(
         content = await file.read()
         content_str = content.decode('utf-8')
         
-        # Create document directly from content
+        # Create document
         document = Document(
             page_content=content_str,
             metadata={
@@ -164,14 +156,27 @@ async def upload_document(
             }
         )
         
-        # Add document to ChromaDB
-        app.chroma_service.add_document(document)
+        # Split document into chunks using document loader
+        split_docs = app.document_loader.split_documents([document])
+        
+        # Track processing stats
+        processed_count = 0
+        skipped_count = 0
+        
+        # Add documents to ChromaDB
+        for doc in split_docs:
+            # Check if document needs updating based on filename
+            if app.chroma_service._should_update_document(file.filename):
+                app.chroma_service.add_document(doc)
+                processed_count += 1
+            else:
+                skipped_count += 1
         
         return UploadResponse(
             message="File processed successfully",
-            document_count=1,
-            processed_count=1,
-            skipped_count=0,
+            document_count=len(split_docs),
+            processed_count=processed_count,
+            skipped_count=skipped_count,
             filename=file.filename,
             status="processed"
         )
