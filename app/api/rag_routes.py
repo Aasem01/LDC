@@ -4,7 +4,7 @@ from app.utils.logger import api_logger
 from app.models.rag_schemas import QueryRequest, QueryResponse
 from app.utils.time_manager import measure_time, get_current_timestamp
 from app.api.interactions import create_interaction
-from app.schemas.interaction_schema import InteractionCreate
+from app.schemas.interaction_schema import InteractionCreate, DocumentMetadata
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 
@@ -38,13 +38,23 @@ async def query(
         api_logger.info("Successfully processed query")
         api_logger.debug(f"Found {len(result['source_documents'])} relevant documents")
         
+        # Format source documents according to schema
+        formatted_documents = []
+        for doc in result['source_documents']:
+            metadata = doc.get('metadata', {})
+            formatted_doc = DocumentMetadata(
+                document_type=metadata.get('document_type', 'text/plain'),
+                source=metadata.get('source', 'unknown')
+            )
+            formatted_documents.append(formatted_doc)
+        
         # Create an InteractionCreate object
         interaction = InteractionCreate(
-            user_id=request.user_id,
+            user_id=str(request.user_id),
             query=request.question,
             answer=result["answer"],
             timestamp=get_current_timestamp(),
-            source_documents=result["source_documents"]
+            source_documents=formatted_documents
         )
         
         # Add database write to background tasks

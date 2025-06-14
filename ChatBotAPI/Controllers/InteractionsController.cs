@@ -53,7 +53,7 @@ namespace ChatBotAPI.Controllers
                 var requestJson = JsonSerializer.Serialize(request, _jsonOptions);
                 _logger.LogInformation($"Request payload: {requestJson}");
 
-                var response = await _pythonBackend.PostAsync<InteractionResponse>("api/v1/interactions", request);
+                var response = await _pythonBackend.PostAsync<InteractionResponse>("sqlite/interactions", request);
 
                 if (response == null)
                 {
@@ -82,7 +82,7 @@ namespace ChatBotAPI.Controllers
             {
                 _logger.LogInformation($"Getting interaction {interactionId}");
 
-                var response = await _pythonBackend.GetAsync<InteractionResponse>($"api/v1/interactions/{interactionId}");
+                var response = await _pythonBackend.GetAsync<InteractionResponse>($"sqlite/interactions/{interactionId}");
 
                 if (response == null)
                 {
@@ -110,7 +110,7 @@ namespace ChatBotAPI.Controllers
             {
                 _logger.LogInformation($"Getting interactions for user {userId}");
 
-                var response = await _pythonBackend.GetAsync<InteractionList>($"api/v1/interactions/user/{userId}");
+                var response = await _pythonBackend.GetAsync<InteractionList>($"sqlite/interactions/user/{userId}");
 
                 if (response == null)
                 {
@@ -138,7 +138,7 @@ namespace ChatBotAPI.Controllers
             {
                 _logger.LogInformation("Getting all interactions");
 
-                var response = await _pythonBackend.GetAsync<InteractionList>("api/v1/interactions");
+                var response = await _pythonBackend.GetAsync<InteractionList>("sqlite/interactions");
 
                 if (response == null)
                 {
@@ -166,7 +166,7 @@ namespace ChatBotAPI.Controllers
             {
                 _logger.LogInformation($"Deleting interactions for user {userId}");
 
-                var response = await _pythonBackend.DeleteAsync<object>($"api/v1/interactions/user/{userId}");
+                var response = await _pythonBackend.DeleteAsync<object>($"sqlite/interactions/user/{userId}");
 
                 return Ok(new { message = $"Successfully deleted interactions for user {userId}" });
             }
