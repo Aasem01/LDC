@@ -13,7 +13,7 @@ class AppSettings(BaseSettings):
     API_PORT: int = 8000
     
     # Security Settings
-    ALLOWED_ORIGINS: List[str] = ["http://127.0.0.1:7000", "http://localhost:7000"]
+    ALLOWED_ORIGINS: List[str] = ["http://127.0.0.1:7000", "http://localhost:7000", "testclient"]
     
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = None
@@ -43,6 +43,9 @@ class AppSettings(BaseSettings):
     
     # API Keys
     API_KEY: str = Field(default="", description="API key for OpenAI")
+
+    # Database URL (for SQLAlchemy)
+    DATABASE_URL: Optional[str] = None
     
     class Config:
         env_file = ".env"

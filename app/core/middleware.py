@@ -62,7 +62,7 @@ async def validate_api_key(request: Request) -> Optional[JSONResponse]:
         api_logger.info(f"Final request origin: {origin}")
 
         # Check if origin is allowed
-        allowed_origins = ["http://localhost:7000", "http://127.0.0.1:7000", "localhost:7000", "127.0.0.1:7000"]
+        allowed_origins = settings.ALLOWED_ORIGINS
         api_logger.info(f"Checking against allowed origins: {allowed_origins}")
         
         if not any(allowed_origin in origin for allowed_origin in allowed_origins):

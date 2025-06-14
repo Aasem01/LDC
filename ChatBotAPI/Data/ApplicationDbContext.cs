@@ -11,6 +11,7 @@ namespace ChatBotAPI.Data
         }
 
         public DbSet<ChatLog> ChatLogs { get; set; }
+        public DbSet<Interaction> Interactions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -22,6 +23,26 @@ namespace ChatBotAPI.Data
 
             modelBuilder.Entity<ChatLog>()
                 .Property(c => c.Answer)
+                .IsRequired();
+
+            modelBuilder.Entity<Interaction>()
+                .Property(i => i.UserId)
+                .IsRequired();
+
+            modelBuilder.Entity<Interaction>()
+                .Property(i => i.DocumentId)
+                .IsRequired();
+
+            modelBuilder.Entity<Interaction>()
+                .Property(i => i.Query)
+                .IsRequired();
+
+            modelBuilder.Entity<Interaction>()
+                .Property(i => i.Response)
+                .IsRequired();
+
+            modelBuilder.Entity<Interaction>()
+                .Property(i => i.Metadata)
                 .IsRequired();
         }
     }
