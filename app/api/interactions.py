@@ -8,7 +8,8 @@ from app.utils.logger import api_logger
 
 interactions_router = APIRouter(tags=["interactions"], prefix="/sqlite")
 
-@interactions_router.post("/interactions/", response_model=InteractionResponse)
+@interactions_router.post("/interactions", response_model=InteractionResponse)
+# @interactions_router.post("/interactions/", response_model=InteractionResponse)
 def create_interaction(
     interaction: InteractionCreate,
     db: Session = Depends(get_db)
@@ -50,7 +51,8 @@ def get_user_interactions(
     api_logger.info(f"Retrieved user interactions: {response}")
     return response
 
-@interactions_router.get("/interactions/", response_model=InteractionList)
+# @interactions_router.get("/interactions/", response_model=InteractionList)
+@interactions_router.get("/interactions", response_model=InteractionList)
 def get_all_interactions(
     db: Session = Depends(get_db)
 ):
